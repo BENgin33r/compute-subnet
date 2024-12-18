@@ -611,7 +611,9 @@ def get_machine_specs():
             "cuda_driver": nvmlSystemGetCudaDriverVersion(),
             "details": []
         }
-
+        #set nvlink connected pairs to 0
+        nvlink_connected_pairs = 0
+        
         for i in range(device_count):
             handle = nvmlDeviceGetHandleByIndex(i)
             # graphic_clock = nvmlDeviceGetDefaultApplicationsClock(handle, NVML_CLOCK_GRAPHICS)
@@ -628,6 +630,24 @@ def get_machine_specs():
             # Get GPU utilization rates
             utilization = nvmlDeviceGetUtilizationRates(handle)
 
+         # Check NVLink state for each possible NVLink connection
+        nvlink_connected = False
+        for link in range(nvmlDeviceGetMaxNvLinkDevice(handle)):
+            try:
+                nvlink_state = nvmlDeviceGetNvLinkState(handle, link)
+                if nvlink_state == NVML_LINK_STATE_CONNECTED:
+                    nvlink_connected = True
+                    nvlink_connected_pairs += 1
+                    break
+            except NVMLError as e:
+                print(f"Error checking NVLink state for GPU {i}, link {link}: {e}")
+
+        # Determine NVLink status for each GPU
+        if nvlink_connected_pairs < device_count:
+            nvlink_status = "NVLink for PCIe"
+        else:
+            nvlink_status = "NVLink for SXM"
+
             data["gpu"]["details"].append(
                 {
                     "name": nvmlDeviceGetName(handle),
@@ -640,8 +660,11 @@ def get_machine_specs():
                     "pcie_speed": nvmlDeviceGetPcieSpeed(handle),
                     "gpu_utilization": utilization.gpu,
                     "memory_utilization": utilization.memory,
+                    "nvlink_state": "connected" if nvlink_connected else "disconnected"
+                    "nvlink_status": nvlink_status
                 }
             )
+
 
         nvmlShutdown()
     except Exception as exc:
